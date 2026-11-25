@@ -116,6 +116,7 @@ def run_cycle(config: dict, state: StockState, session, dry_run: bool = False) -
             log.exception("%s: unexpected error", name)
             failures.append(f"{name}: {exc}")
 
+    
     if failures and config.get("report_errors_to_discord", True) and not dry_run:
         notifier.notify_text(
             config["discord_webhook_url"],
@@ -126,7 +127,13 @@ def run_cycle(config: dict, state: StockState, session, dry_run: bool = False) -
     if dry_run:
         return all_items
 
+    # Fail closed: do not update stock state if any store failed.
+    if failures:
+        log.error("Skipping state update because one or more stores failed.")
+        return []
+
     restocked = state.diff(all_items)
+
 
     if restocked:
         log.info("RESTOCK: %d item(s) came back in stock", len(restocked))
