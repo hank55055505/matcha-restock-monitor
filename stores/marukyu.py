@@ -181,25 +181,14 @@ def scrape_product(session, url: str, fallback_name: str, delay: float) -> list[
             for var in dom_variants
         ]
 
-    # --- Strategy 3: whole-page fallback ---------------------------------
-    page_text = soup.get_text(" ", strip=True)
-    # The catalog notice mentions "sold out" generically on every matcha page,
-    # so match only the specific WooCommerce out-of-stock sentence.
-    out_of_stock = bool(OUT_OF_STOCK_TEXT.search(page_text))
-    slug = url.rstrip("/").rsplit("/", 1)[-1]
 
-    return [
-        Item(
-            key=f"marukyu:{slug}",
-            store=STORE,
-            name=name,
-            variant=None,
-            url=url,
-            price=price,
-            available=not out_of_stock,
-            detection="page-text",
-        )
-    ]
+    # --- Strategy 3: no reliable variant data ---------------------------
+    # Do not guess stock status from page text. These products have
+    # independently stocked sizes, so variant-level data is required.
+    raise StoreError(
+        f"No reliable per-variant stock data found for {url}"
+    )
+
 
 
 def fetch(session, config: dict) -> list[Item]:
@@ -217,7 +206,9 @@ def fetch(session, config: dict) -> list[Item]:
         try:
             items.extend(scrape_product(session, url, name, delay))
         except StoreError as exc:
-            log.warning("Marukyu: skipping %s (%s)", url, exc)
+            raise StoreError(
+                f"Failed to read Marukyu product {url}: {exc}"
+            ) from exc
 
     log.info("Marukyu: read stock for %d items", len(items))
     return items
